@@ -177,7 +177,7 @@ class FileQueue
             try {
                 ob_start();
                 fpassthru($this->_fp_queueFile);
-                $content = ob_get_clean();
+                $content = ob_get_flush();
             } catch (Exception $e) {
             }
             if (!empty($content)) {
