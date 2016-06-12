@@ -1,5 +1,6 @@
 <?php
 
+require '../src/FileQueueBase.php';
 require '../src/FileQueue.php';
 
 try {

@@ -5,50 +5,44 @@
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v0.0.1
+ * @version v0.1.0
  */
-class FileQueue
+class FileQueue extends FileQueueBase
 {
-
     /**
-     * @var string $_namespace : queue namespace
+     * @var string $_role : queue role
      */
-    private $_queueNamespace = 'nsp';
+    protected $_role = 'generator';
 
     /**
      * @var string $_queueDir : queue directory
      */
-    private $_queueDir = '/var/run/php-file-queue';
+    protected $_queueDir = '/var/run/php-file-queue';
 
     /**
      * @var string $_queueFileName : queue file name
      */
-    private $_queueFileName = 'default';
+    protected $_queueFileName = 'default';
 
     /**
      * @var string $_queueFileSuffix : queue file suffix
      */
-    private $_queueFileSuffix = 'mq';
+    protected $_queueFileSuffix = 'mq';
 
     /**
      * @var string $_cursorFileSuffix : queue cursor file suffix
      */
-    private $_cursorFileSuffix = 'cursor';
+    protected $_cursorFileSuffix = 'cursor';
 
     /**
-     * @var string $_trackFileSuffix : queue cursor track file suffix, used to recover the cursor
+     * @var string $_namespace : queue namespace
      */
-    private $_trackFileSuffix = 'track';
+    protected $_queueNamespace = 'nsp';
 
     /**
-     * @var bool $_doConsume : do or not consume queue file
+     * @var int $_initialReadLineNumber : the number of initial read rows
      */
-    private $_doConsume = true;
-
-    /**
-     * @var int $_consumeSpan : queue file consume frequency line
-     */
-    private $_consumeSpan = 1000000;
+    protected $_initialReadLineNumber = 0;
 
     /**
      * @var resource $_fp_queueFile : queue file open handler
@@ -61,38 +55,70 @@ class FileQueue
     private $_fp_cursorFile;
 
     /**
-     * @var resource $_fp_trackFile : queue cursor track file open handler
-     */
-    private $_fp_trackFile;
-
-    /**
      * construct a queue object
      *
-     * @param array $configs
+     * @param array $config
      */
-    public function __construct($configs)
+    public function __construct($config)
     {
-        $this->setConfig($configs);
-        $this->mount();
+        $silent = false;
+        if (isset($config['silent'])) {
+            $silent = $config['silent'];
+            unset($config['silent']);
+        }
+        $this->setConfig($config);
+        if (!$silent) {
+            $this->beforeMount($config);
+            $this->mount();
+            $this->afterMount();
+        }
     }
 
     /**
-     * set queue property
+     * before mount
      *
-     * @param $configs
+     * @param $config
      */
-    private function setConfig($configs)
+    private function beforeMount($config)
     {
-        if (!is_array($configs)) {
-            $configs = array();
+        $queueFile = $this->getQueueFile();
+        $cursorFile = $this->getCursorFile();
+        $configsFile = $this->getConfigsFile();
+
+        $this->mkDirs($this->_queueDir);
+
+        if (!file_exists($queueFile)) {
+            $fp = fopen($queueFile, 'w+');
+            fclose($fp);
+
+            if (file_exists($cursorFile)) {
+                unlink($cursorFile);
+            }
+
+            if (file_exists($configsFile)) {
+                unlink($configsFile);
+            }
         }
 
-        foreach ($configs as $config => $value) {
-            $_config = '_' . $config;
-            if (isset($this->$_config)) {
-                $setConfig = 'set' . ucfirst($config);
-                $this->$setConfig($value);
+        if (!file_exists($cursorFile) && !$this->isGenerator()) {
+            $fp = fopen($cursorFile, 'w+');
+            fclose($fp);
+        }
+
+        if (!$this->isGenerator()) {
+            if (!file_exists($configsFile)) {
+                $fp = fopen($configsFile, 'w+');
+                fclose($fp);
             }
+            $fp_configs = fopen($configsFile, 'r+');
+            flock($fp_configs, LOCK_EX);
+            $fileConsumes = $this->parseSerializeFile($fp_configs, $configsFile);
+            $fileConsumes[$this->_queueNamespace] = $config;
+            rewind($fp_configs);
+            ftruncate($fp_configs, 0);
+            fwrite($fp_configs, serialize($fileConsumes));
+            flock($fp_configs, LOCK_UN);
+            fclose($fp_configs);
         }
     }
 
@@ -101,33 +127,31 @@ class FileQueue
      */
     private function mount()
     {
-        $queueFile = $this->getQueueFile();
-        $cursorFile = $this->getCursorFile();
-        $trackFile = $this->getTrackFile();
+        $this->_fp_queueFile = fopen($this->getQueueFile(), 'a+b');
+        if (!$this->isGenerator()) {
+            $this->_fp_cursorFile = fopen($this->getCursorFile(), 'r+b');
+        }
+    }
 
-        if (!file_exists($queueFile)) {
-            $this->mkDirs($this->_queueDir);
-            $fp = fopen($queueFile, 'w+');
-            fclose($fp);
-
-            if (file_exists($cursorFile)) {
-                unlink($cursorFile);
+    /**
+     * after mount
+     */
+    private function afterMount()
+    {
+        $initialReadLineNumber = $this->_initialReadLineNumber;
+        // if the number of initial read line number was specified
+        if ($initialReadLineNumber) {
+            flock($this->_fp_cursorFile, LOCK_EX);
+            if ($initialReadLineNumber == 'end') {
+                $pos = filesize($this->getQueueFile());
+                $line = $this->length();
+            } else {
+                $pos = $this->getSpecifyLinePosition($initialReadLineNumber);
+                $line = $initialReadLineNumber;
             }
+            $this->recordCursor($pos, $line);
+            flock($this->_fp_cursorFile, LOCK_UN);
         }
-
-        if (!file_exists($cursorFile)) {
-            $fp = fopen($cursorFile, 'w+');
-            fclose($fp);
-        }
-
-        if (!file_exists($trackFile)) {
-            $fp = fopen($trackFile, 'w+');
-            fclose($fp);
-        }
-
-        $this->_fp_queueFile = fopen($queueFile, 'a+b');
-        $this->_fp_cursorFile = fopen($cursorFile, 'r+b');
-        $this->_fp_trackFile = fopen($trackFile, 'r+b');
     }
 
     /**
@@ -166,30 +190,13 @@ class FileQueue
      */
     public function pop($number = 1)
     {
+        if ($this->isGenerator()) {
+            throw new LogicException('Generator can not pop data from queue!');
+        }
         $number = max(1, $number);
 
         flock($this->_fp_cursorFile, LOCK_EX);
         list($pos, $line) = $this->parseCursor();
-
-        if ($this->_doConsume && $line > $this->_consumeSpan) {
-            flock($this->_fp_queueFile, LOCK_EX);
-            $content = null;
-            try {
-                ob_start();
-                fpassthru($this->_fp_queueFile);
-                $content = ob_get_flush();
-            } catch (Exception $e) {
-            }
-            if (!empty($content)) {
-                ftruncate($this->_fp_queueFile, 0);
-                fwrite($this->_fp_queueFile, $content);
-                rewind($this->_fp_queueFile);
-                $pos = 0;
-                $line = 1;
-                $this->recordCursor($pos, $line);
-            }
-            flock($this->_fp_queueFile, LOCK_UN);
-        }
 
         $result = array();
         for ($i = 0; $i < $number; $i++) {
@@ -252,13 +259,21 @@ class FileQueue
      */
     public function track()
     {
+        $trackFile = $this->getTrackFile();
+        if (!file_exists($trackFile)) {
+            $fp = fopen($trackFile, 'w+');
+            fclose($fp);
+        }
+        $fp_track = fopen($trackFile, 'r+b');
         flock($this->_fp_cursorFile, LOCK_EX);
-        flock($this->_fp_trackFile, LOCK_EX);
+        flock($fp_track, LOCK_EX);
         rewind($this->_fp_cursorFile);
         $cursorData = fgets($this->_fp_cursorFile);
-        fwrite($this->_fp_trackFile, $cursorData);
-        flock($this->_fp_trackFile, LOCK_UN);
+        ftruncate($fp_track, 0);
+        fwrite($fp_track, $cursorData);
+        flock($fp_track, LOCK_UN);
         flock($this->_fp_cursorFile, LOCK_UN);
+        fclose($fp_track);
     }
 
     /**
@@ -266,17 +281,24 @@ class FileQueue
      */
     public function recover()
     {
-        flock($this->_fp_trackFile, LOCK_EX);
+        $trackFile = $this->getTrackFile();
+        if (!file_exists($trackFile)) {
+            $fp = fopen($trackFile, 'w+');
+            fclose($fp);
+        }
+        $fp_track = fopen($trackFile, 'r+b');
+        flock($fp_track, LOCK_EX);
         flock($this->_fp_cursorFile, LOCK_EX);
-        rewind($this->_fp_trackFile);
-        $trackData = fgets($this->_fp_trackFile);
+        rewind($fp_track);
+        $trackData = fgets($fp_track);
         if ($trackData !== false) {
             $pos = intval(trim($trackData[0]));
-            $line = isset($trackData[1]) ? intval(trim($trackData[1])) : 0;
+            $line = isset($trackData[1]) ? max(1, intval(trim($trackData[1]))) : 1;
             $this->recordCursor($pos, $line);
         }
         flock($this->_fp_cursorFile, LOCK_UN);
-        flock($this->_fp_trackFile, LOCK_UN);
+        flock($fp_track, LOCK_UN);
+        fclose($fp_track);
     }
 
     /**
@@ -302,13 +324,59 @@ class FileQueue
     }
 
     /**
+     * get specify line position, may return last line position when line number greater then queue length
+     *
+     * @param $line
+     * @param null $fp_queueFile
+     * @return int
+     */
+    public function getSpecifyLinePosition($line, $fp_queueFile = null)
+    {
+        if (is_null($fp_queueFile)) {
+            $fp_queueFile = $this->_fp_queueFile;
+        }
+        flock($fp_queueFile, LOCK_EX);
+        $last_position = ftell($fp_queueFile);
+        rewind($fp_queueFile);
+        $lineCount = 1;
+        while (fgets($fp_queueFile) !== false) {
+            $lineCount++;
+            if ($lineCount == $line) {
+                break;
+            }
+        }
+        $pos = ftell($fp_queueFile);
+        fseek($fp_queueFile, $last_position);
+        flock($fp_queueFile, LOCK_UN);
+        return $pos;
+    }
+
+    /**
+     * tests for the end of queue
+     *
+     * @return bool
+     */
+    public function eof()
+    {
+        $eof = true;
+        if ($this->_fp_queueFile) {
+            flock($this->_fp_queueFile, LOCK_EX);
+            if (!feof($this->_fp_queueFile)) {
+                $eof = false;
+            }
+            flock($this->_fp_queueFile, LOCK_UN);
+        }
+        return $eof;
+    }
+
+    /**
      * get the path of queue file
      *
      * @return string
      */
     public function getQueueFile()
     {
-        return $this->getQueueFileWithoutSuffix() . '.' . $this->getQueueFileSuffix();
+        return $this->getNormalizeQueueDir() . $this->getQueueFileName() . '.' . $this->getQueueFileSuffix();
     }
 
     /**
@@ -328,7 +396,27 @@ class FileQueue
      */
     public function getTrackFile()
     {
-        return $this->getQueueFileWithoutSuffix() . '.' . $this->getTrackFileSuffix();
+        return $this->getQueueFileWithoutSuffix() . '.track';
+    }
+
+    /**
+     * get the path of configs file
+     *
+     * @return string
+     */
+    public function getConfigsFile()
+    {
+        return $this->getNormalizeQueueDir() . $this->getQueueFileName() . '.configs';
+    }
+
+    /**
+     * get the path of consumption backup file
+     *
+     * @return string
+     */
+    public function getDoConsumeBackupFile()
+    {
+        return $this->getQueueFile() . '.' . date('Y-m-d') . '.backup';
     }
 
     /**
@@ -351,181 +439,184 @@ class FileQueue
         return rtrim($this->getQueueDir(), '/') . '/';
     }
 
-    /**
-     * set queue namespace
-     *
-     * @param $queueNamespace
-     */
-    private function setQueueNamespace($queueNamespace)
-    {
-        $this->_queueNamespace = $queueNamespace;
-    }
-
-    /**
-     * get queue namespace
-     *
-     * @return string
-     */
-    public function getQueueNamespace()
-    {
-        return $this->_queueNamespace;
-    }
-
-
-    /**
-     * set queue directory
-     *
-     * @param $queueDir
-     */
-    private function setQueueDir($queueDir)
-    {
-        $this->_queueDir = $queueDir;
-    }
-
-    /**
-     * get queue directory
-     *
-     * @return string
-     */
-    public function getQueueDir()
-    {
-        return $this->_queueDir;
-    }
-
-    /**
-     * set queue file name
-     *
-     * @param $queueFileName
-     */
-    private function setQueueFileName($queueFileName)
-    {
-        $this->_queueFileName = $queueFileName;
-    }
-
-    /**
-     * get queue file name
-     *
-     * @return string
-     */
-    public function getQueueFileName()
-    {
-        return $this->_queueFileName;
-    }
-
-    /**
-     * set queue file suffix
-     *
-     * @param $queueFileSuffix
-     */
-    private function setQueueFileSuffix($queueFileSuffix)
-    {
-        $this->_queueFileSuffix = $queueFileSuffix;
-    }
-
-    /**
-     * get queue file suffix
-     *
-     * @return string
-     */
-    public function getQueueFileSuffix()
-    {
-        return $this->_queueFileSuffix;
-    }
-
-    /**
-     * set queue cursor file suffix
-     *
-     * @param $cursorFileSuffix
-     */
-    private function setCursorFileSuffix($cursorFileSuffix)
-    {
-        $this->_cursorFileSuffix = $cursorFileSuffix;
-    }
-
-    /**
-     * get queue cursor file suffix
-     *
-     * @return string
-     */
-    public function getCursorFileSuffix()
-    {
-        return $this->_cursorFileSuffix;
-    }
-
-    /**
-     * set queue track file suffix
-     *
-     * @param $trackFileSuffix
-     */
-    private function setTrackFileSuffix($trackFileSuffix)
-    {
-        $this->_trackFileSuffix = $trackFileSuffix;
-    }
-
-    /**
-     * get queue track file suffix
-     *
-     * @return string
-     */
-    public function getTrackFileSuffix()
-    {
-        return $this->_trackFileSuffix;
-    }
-
-
-    /**
-     * set do or not consume
-     *
-     * @param $doConsume
-     */
-    private function setDoConsume($doConsume)
-    {
-        $this->_doConsume = (bool)$doConsume;
-    }
-
-    /**
-     * get the switch of do or not consume
-     *
-     * @return bool
-     */
-    public function getDoConsume()
-    {
-        return $this->_doConsume;
-    }
-
-    /**
-     * set consume frequency line
-     *
-     * @param $consumeSpan
-     */
-    private function setConsumeSpan($consumeSpan)
-    {
-        $this->_consumeSpan = $consumeSpan;
-    }
-
-    /**
-     * get consume frequency line
-     *
-     * @return int
-     */
-    public function getConsumeSpan()
-    {
-        return $this->_consumeSpan;
-    }
+//    /**
+//     * set queue role
+//     *
+//     * @param $role
+//     */
+//    private function setRole($role)
+//    {
+//        $this->_role = $role;
+//    }
+//
+//    /**
+//     * get queue role
+//     * @return string
+//     */
+//    public function getRole()
+//    {
+//        return $this->_role;
+//    }
+//
+//    /**
+//     * set queue namespace
+//     *
+//     * @param $queueNamespace
+//     */
+//    private function setQueueNamespace($queueNamespace)
+//    {
+//        $this->_queueNamespace = $queueNamespace;
+//    }
+//
+//    /**
+//     * get queue namespace
+//     *
+//     * @return string
+//     */
+//    public function getQueueNamespace()
+//    {
+//        return $this->_queueNamespace;
+//    }
+//
+//    /**
+//     * set queue directory
+//     *
+//     * @param $queueDir
+//     */
+//    private function setQueueDir($queueDir)
+//    {
+//        $this->_queueDir = $queueDir;
+//    }
+//
+//    /**
+//     * get queue directory
+//     *
+//     * @return string
+//     */
+//    public function getQueueDir()
+//    {
+//        return $this->_queueDir;
+//    }
+//
+//    /**
+//     * set queue file name
+//     *
+//     * @param $queueFileName
+//     */
+//    private function setQueueFileName($queueFileName)
+//    {
+//        $this->_queueFileName = $queueFileName;
+//    }
+//
+//    /**
+//     * get queue file name
+//     *
+//     * @return string
+//     */
+//    public function getQueueFileName()
+//    {
+//        return $this->_queueFileName;
+//    }
+//
+//    /**
+//     * set queue file suffix
+//     *
+//     * @param $queueFileSuffix
+//     */
+//    private function setQueueFileSuffix($queueFileSuffix)
+//    {
+//        $this->_queueFileSuffix = $queueFileSuffix;
+//    }
+//
+//    /**
+//     * get queue file suffix
+//     *
+//     * @return string
+//     */
+//    public function getQueueFileSuffix()
+//    {
+//        return $this->_queueFileSuffix;
+//    }
+//
+//    /**
+//     * set queue cursor file suffix
+//     *
+//     * @param $cursorFileSuffix
+//     */
+//    private function setCursorFileSuffix($cursorFileSuffix)
+//    {
+//        $this->_cursorFileSuffix = $cursorFileSuffix;
+//    }
+//
+//    /**
+//     * get queue cursor file suffix
+//     *
+//     * @return string
+//     */
+//    public function getCursorFileSuffix()
+//    {
+//        return $this->_cursorFileSuffix;
+//    }
+//
+//    /**
+//     * set the number of initial read rows
+//     *
+//     * @param $initialReadLineNumber
+//     */
+//    private function setInitialReadLineNumber($initialReadLineNumber)
+//    {
+//        $this->_initialReadLineNumber = $initialReadLineNumber;
+//    }
+//
+//    /**
+//     * get the number of initial read rows
+//     *
+//     * @return int
+//     */
+//    public function getInitialReadLineNumber()
+//    {
+//        return $this->_initialReadLineNumber;
+//    }
 
     /**
      * parse cursor to get position and line number
      *
+     * @param null $fp_cursorFile
      * @return array
      */
-    private function parseCursor()
+    public function parseCursor($fp_cursorFile = null)
     {
-        rewind($this->_fp_cursorFile);
-        $cursorData = fgets($this->_fp_cursorFile);
+        if (is_null($fp_cursorFile)) {
+            $fp_cursorFile = $this->_fp_cursorFile;
+        }
+        rewind($fp_cursorFile);
+        $cursorData = fgets($fp_cursorFile);
         $cursorData = explode(',', $cursorData);
-        $pos = intval(trim($cursorData[0]));
+        $pos = max(0, intval(trim($cursorData[0])));
         $line = isset($cursorData[1]) ? max(1, intval(trim($cursorData[1]))) : 1;
         return array($pos, $line);
+    }
+
+    /**
+     * parse file of store serialize data
+     *
+     * @param $fp
+     * @param $file
+     * @return array|mixed|string
+     */
+    public function parseSerializeFile($fp, $file)
+    {
+        $fileSize = filesize($file);
+        if (!$fileSize) {
+            return array();
+        }
+        rewind($fp);
+        $data = fread($fp, $fileSize);
+        $data = unserialize($data);
+        if (!is_array($data)) {
+            $data = array();
+        }
+        return $data;
     }
 
     /**
@@ -533,42 +624,24 @@ class FileQueue
      *
      * @param $pos
      * @param $line
+     * @param null $fp_cursorFile
      */
-    private function recordCursor($pos, $line)
+    public function recordCursor($pos, $line, $fp_cursorFile = null)
     {
-        rewind($this->_fp_cursorFile);
-        ftruncate($this->_fp_cursorFile, 0);
-        fwrite($this->_fp_cursorFile, "{$pos},{$line}");
+        if (empty($fp_cursorFile)) {
+            $fp_cursorFile = $this->_fp_cursorFile;
+        }
+        rewind($fp_cursorFile);
+        ftruncate($fp_cursorFile, 0);
+        fwrite($fp_cursorFile, "{$pos},{$line}");
     }
 
     /**
-     * make multi-level directory
-     *
-     * @param $dir
-     * @param int $mode
-     * @return bool
+     * check whether the queue role is generator
      */
-    private function mkDirs($dir, $mode = 0755)
+    public function isGenerator()
     {
-        if (!is_dir($dir)) {
-            $this->mkDirs(dirname($dir), $mode);
-            return @mkdir($dir, $mode);
-        }
-        return true;
-    }
-
-    /**
-     * magic function called when call method which does't exist
-     *
-     * @param $name
-     * @param $parameters
-     * @throws Exception
-     */
-    public function __call($name, $parameters)
-    {
-        if (preg_match('/^set[A-Z]/', $name)) {
-            throw new Exception('Can not set config ' . preg_replace('/^set/', '', $name));
-        }
+        return $this->_role == 'generator';
     }
 
     /**
@@ -582,10 +655,6 @@ class FileQueue
 
         if (!is_null($this->_fp_cursorFile)) {
             fclose($this->_fp_cursorFile);
-        }
-
-        if (!is_null($this->_fp_trackFile)) {
-            fclose($this->_fp_trackFile);
         }
     }
 
