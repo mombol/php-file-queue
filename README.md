@@ -36,7 +36,6 @@ File queue data consumption instance
 $QueueDataConsume = new QueueDataConsume(array(
     'consumeSpan' => 5, // queue consumption span
     'doConsumeBackup' => true // whether or not to backup the queue consumption data
-    'doConsumeBackup' => true,
     'queueDir' => '/var/run/php-file-queue',
     'queueFileName' => 'default'
 ));
