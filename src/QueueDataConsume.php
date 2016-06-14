@@ -5,7 +5,7 @@
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v0.1.0
+ * @version v1.0.0
  */
 class QueueDataConsume extends FileQueueBase
 {
@@ -27,7 +27,7 @@ class QueueDataConsume extends FileQueueBase
     /**
      * @var string $_queueFileName : queue file name
      */
-    protected $_queueFileName = '';
+    protected $_queueFileName = 'default';
 
     /**
      * @var string $_configsFile : queue config file
@@ -57,7 +57,8 @@ class QueueDataConsume extends FileQueueBase
             $this->setConfig($config);
             $this->_silentFileQueue = new FileQueue(array(
                 'silent' => true,
-                'queueDir' => $this->_queueDir
+                'queueDir' => $this->_queueDir,
+                'queueFileName' => $this->_queueFileName
             ));
             $this->_configsFile = $this->_silentFileQueue->getConfigsFile();
             $this->_queueFile = $this->_silentFileQueue->getQueueFile();
@@ -167,6 +168,70 @@ class QueueDataConsume extends FileQueueBase
                         foreach ($fp_cursors as $fp_cursor) {
                             fclose($fp_cursor);
                         }
+                    }
+                }
+            }
+            flock($fp_configs, LOCK_UN);
+            fclose($fp_configs);
+        }
+    }
+
+    /**
+     * clean the queue data
+     */
+    public function clean()
+    {
+        if (file_exists($this->_configsFile)) {
+            $configsFile = $this->_configsFile;
+            $queueFile = $this->_queueFile;
+            $fp_configs = fopen($configsFile, 'r');
+            flock($fp_configs, LOCK_EX);
+            $fileSize = filesize($configsFile);
+            if ($fileSize) {
+                $configs = fread($fp_configs, $fileSize);
+                $configs = unserialize($configs);
+                if (!is_array($configs)) {
+                    $configs = array();
+                }
+                if ($configs) {
+                    $cursorFiles = array();
+                    foreach ($configs as $config) {
+                        $config['silent'] = true;
+                        $FileQueue = new FileQueue($config);
+                        $cursorFiles[] = $cursorFile = $FileQueue->getCursorFile();
+                    }
+
+                    $fp_cursors = array();
+                    foreach ($cursorFiles as $key => $cursorFile) {
+                        $fp_cursors[] = fopen($cursorFile, 'r+');
+                    }
+
+                    foreach ($fp_cursors as $fp_cursor) {
+                        flock($fp_cursor, LOCK_EX);
+                    }
+
+                    $fp_queueFile = fopen($queueFile, 'r+b');
+                    flock($fp_queueFile, LOCK_EX);
+
+                    rewind($fp_queueFile);
+                    ftruncate($fp_queueFile, 0);
+                    rewind($fp_queueFile);
+
+                    foreach ($fp_cursors as $fp_cursor) {
+                        rewind($fp_cursor);
+                        ftruncate($fp_cursor, 0);
+                        fwrite($fp_cursor, "0,1");
+                    }
+
+                    flock($fp_queueFile, LOCK_UN);
+
+                    $reverse_fp_cursors = array_reverse($fp_cursors);
+                    foreach ($reverse_fp_cursors as $reverse_fp_cursor) {
+                        flock($reverse_fp_cursor, LOCK_UN);
+                    }
+
+                    foreach ($fp_cursors as $fp_cursor) {
+                        fclose($fp_cursor);
                     }
                 }
             }

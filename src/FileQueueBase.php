@@ -1,6 +1,13 @@
 <?php
 
-class FileQueueBase
+/**
+ * php file queue base abstract class
+ *
+ * @author mombol
+ * @contact mombol@163.com
+ * @version v1.0.0
+ */
+abstract class FileQueueBase
 {
 
     /**

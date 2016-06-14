@@ -1,0 +1,18 @@
+{
+    "name": "mombol/php-file-queue",
+    "description": "A PHP file queue",
+    "authors": [
+        {
+            "name": "mombol",
+            "email": "mombol@163.com"
+        }
+    ],
+    "require": {},
+    "require-dev": {
+        "phpunit/phpunit": "5.4.*"
+    },
+    "autoload": {
+        "psr-4": {
+        }
+    }
+}

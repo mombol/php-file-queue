@@ -26,7 +26,7 @@ $FileQueue = new FileQueue(array(
     'queueFileName' => 'default',
     'queueFileSuffix' => 'mq',
     'cursorFileSuffix' => 'cursor',
-    'initialReadLineNumber' => 0, //  the number of initial read line number, default value set 0 mean that will read from the queue header, the orthers you can set to 'end' which make it read from the queue tail
+    'initialReadLineNumber' => 0 //  the number of initial read line number, default value set 0 mean that will read from the queue header, the orthers you can set to 'end' which make it read from the queue tail
 ));
 ```
 
@@ -45,14 +45,16 @@ $QueueDataConsume = new QueueDataConsume(array(
 
 ```
 $data = 'test'; // anything you want to push
-$FileQueue->push($data);
+$GerneratorFileQueue->push($data);
 ```
 
 ### Pop data from queue
 
 ```
 $num = 1;
-$data = $FileQueue->pop($num); // $num: pop number
+$currentPostion = array();
+$data = $CustomerFileQueue->pop($num, $currentPostion); // $num : pop number, $currentPostion : current postion after pop a data
+// print_r($currentPostion);
 ```
 
 ### Get current position
@@ -96,8 +98,20 @@ while (!$FileQueue->eof()) {
 }
 ```
 
+### Unmount queue files
+
+```
+$FileQueue->unmount();
+```
+
 ### Consume queue data
 
 ```
 $QueueDataConsume->consume();
+```
+
+### Clean queue data
+
+```
+$QueueDataConsume->clean();
 ```

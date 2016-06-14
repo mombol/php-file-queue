@@ -5,7 +5,7 @@
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v0.1.0
+ * @version v1.0.0
  */
 class FileQueue extends FileQueueBase
 {
@@ -143,14 +143,40 @@ class FileQueue extends FileQueueBase
         if ($initialReadLineNumber) {
             flock($this->_fp_cursorFile, LOCK_EX);
             if ($initialReadLineNumber == 'end') {
+                $line = $this->length(false);
                 $pos = filesize($this->getQueueFile());
-                $line = $this->length();
+                fseek($this->_fp_queueFile, $pos);
+                fgets($this->_fp_queueFile);
             } else {
                 $pos = $this->getSpecifyLinePosition($initialReadLineNumber);
                 $line = $initialReadLineNumber;
+                fseek($this->_fp_queueFile, $pos);
             }
             $this->recordCursor($pos, $line);
+            flock($this->_fp_queueFile, LOCK_UN);
             flock($this->_fp_cursorFile, LOCK_UN);
+        }
+    }
+
+    /**
+     * unmount queue files
+     */
+    public function unmount()
+    {
+        if (!is_null($this->_fp_queueFile)) {
+            try {
+                fclose($this->_fp_queueFile);
+                $this->_fp_queueFile = null;
+            } catch (Exception $e) {
+            }
+        }
+
+        if (!is_null($this->_fp_cursorFile)) {
+            try {
+                fclose($this->_fp_cursorFile);
+                $this->_fp_cursorFile = null;
+            } catch (Exception $e) {
+            }
         }
     }
 
@@ -185,10 +211,11 @@ class FileQueue extends FileQueueBase
     /**
      * pop data from queue file
      *
-     * @param $number
-     * @return array
+     * @param int $number
+     * @param array $currentPosition
+     * @return array|bool
      */
-    public function pop($number = 1)
+    public function pop($number = 1, &$currentPosition = array())
     {
         if ($this->isGenerator()) {
             throw new LogicException('Generator can not pop data from queue!');
@@ -207,15 +234,22 @@ class FileQueue extends FileQueueBase
                 $pos = ftell($this->_fp_queueFile);
                 $line++;
                 $this->recordCursor($pos, $line);
-                $result[] = $data;
+                $result[] = rtrim($data, "\r\n");
             } else {
+                $pos = ftell($this->_fp_queueFile);
+                $this->recordCursor($pos, $line);
                 break;
             }
         }
 
         flock($this->_fp_cursorFile, LOCK_UN);
 
-        return $result;
+        $currentPosition = array(
+            'pos' => $pos,
+            'line' => $line
+        );
+
+        return $result ? $result : false;
     }
 
     /**
@@ -247,8 +281,9 @@ class FileQueue extends FileQueueBase
     public function end()
     {
         flock($this->_fp_cursorFile, LOCK_EX);
-        $pos = filesize($this->_fp_queueFile) - 1;
-        $line = $this->length(false);
+        $queueFile = $this->getQueueFile();
+        $pos = filesize($queueFile);
+        $line = max(1, $this->length(false));
         $this->recordCursor($pos, $line);
         flock($this->_fp_cursorFile, LOCK_UN);
         flock($this->_fp_queueFile, LOCK_UN);
@@ -286,13 +321,14 @@ class FileQueue extends FileQueueBase
             $fp = fopen($trackFile, 'w+');
             fclose($fp);
         }
-        $fp_track = fopen($trackFile, 'r+b');
+        $fp_track = fopen($trackFile, 'rb');
         flock($fp_track, LOCK_EX);
         flock($this->_fp_cursorFile, LOCK_EX);
         rewind($fp_track);
         $trackData = fgets($fp_track);
         if ($trackData !== false) {
-            $pos = intval(trim($trackData[0]));
+            $trackData = explode(',', $trackData);
+            $pos = max(0, intval(trim($trackData[0])));
             $line = isset($trackData[1]) ? max(1, intval(trim($trackData[1]))) : 1;
             $this->recordCursor($pos, $line);
         }
@@ -324,6 +360,24 @@ class FileQueue extends FileQueueBase
     }
 
     /**
+     * tests for the end of queue
+     *
+     * @return bool
+     */
+    public function eof()
+    {
+        $eof = true;
+        if ($this->_fp_queueFile) {
+            flock($this->_fp_queueFile, LOCK_EX);
+            if (!feof($this->_fp_queueFile)) {
+                $eof = false;
+            }
+            flock($this->_fp_queueFile, LOCK_UN);
+        }
+        return $eof;
+    }
+
+    /**
      * get specify line position, may return last line position when line number greater then queue length
      *
      * @param $line
@@ -349,24 +403,6 @@ class FileQueue extends FileQueueBase
         fseek($fp_queueFile, $last_position);
         flock($fp_queueFile, LOCK_UN);
         return $pos;
-    }
-
-    /**
-     * tests for the end of queue
-     *
-     * @return bool
-     */
-    public function eof()
-    {
-        $eof = true;
-        if ($this->_fp_queueFile) {
-            flock($this->_fp_queueFile, LOCK_EX);
-            if (!feof($this->_fp_queueFile)) {
-                $eof = false;
-            }
-            flock($this->_fp_queueFile, LOCK_UN);
-        }
-        return $eof;
     }
 
     /**
@@ -503,20 +539,6 @@ class FileQueue extends FileQueueBase
     public function isGenerator()
     {
         return $this->_role == 'generator';
-    }
-
-    /**
-     * destruct queue object
-     */
-    public function __destruct()
-    {
-        if (!is_null($this->_fp_queueFile)) {
-            fclose($this->_fp_queueFile);
-        }
-
-        if (!is_null($this->_fp_cursorFile)) {
-            fclose($this->_fp_cursorFile);
-        }
     }
 
 }
