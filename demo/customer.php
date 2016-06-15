@@ -12,7 +12,9 @@ try {
 
     while (true) {
         $data = $FileQueue->pop();
-        file_put_contents('/tmp/php-file-queue/default.demo.copy', $data, FILE_APPEND);
+        if ($data) {
+            file_put_contents('/tmp/php-file-queue/default.demo.copy', $data[0] . "\r\n", FILE_APPEND);
+        }
         usleep(500000);
     }
 } catch (Exception $e) {
