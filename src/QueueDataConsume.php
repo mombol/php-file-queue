@@ -91,7 +91,7 @@ class QueueDataConsume extends FileQueueBase
                         $FileQueue = new FileQueue($config);
                         $cursorFiles[] = $cursorFile = $FileQueue->getCursorFile();
                         $fp_cursor = fopen($cursorFile, 'r');
-                        list($pos, $line) = $FileQueue->parseCursor($fp_cursor);
+                        list(, $line) = $FileQueue->parseCursor($fp_cursor);
                         if ($line < $consumeSpan) {
                             $canConsume = false;
                             fclose($fp_cursor);
