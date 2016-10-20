@@ -1,5 +1,7 @@
 <?php
 
+namespace Mombol\FileQueue;
+
 /**
  * php file queue base abstract class
  *
@@ -51,7 +53,8 @@ abstract class FileQueueBase
      *
      * @param $name
      * @param $parameters
-     * @throws Exception
+     * @return mixed
+     * @throws \BadMethodCallException
      */
     public function __call($name, $parameters)
     {
@@ -65,7 +68,7 @@ abstract class FileQueueBase
                 }
             }
         } else {
-            throw new BadMethodCallException('Can not call your method ' . $name);
+            throw new \BadMethodCallException('Can not call your method ' . $name);
         }
     }
 

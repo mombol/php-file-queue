@@ -1,3 +1,16 @@
+## [v1.1.0] - 2016-10-20
+
+### Fixed
+* fixed the queue data consume get wrong configuration when consume and clean queue
+
+### Add
+* add source code namespace in order to installed by composer
+
+### Change
+* remove some unused tests config file
+* compatible PHP5.3 and windows phpunit tests
+
+
 ## [v1.0.0] - 2016-06-14
 
 ### Fixed

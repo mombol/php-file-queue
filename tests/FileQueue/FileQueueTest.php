@@ -2,6 +2,8 @@
 
 namespace tests\FileQueue;
 
+use Mombol\FileQueue\FileQueue;
+
 require_once __DIR__ . '/../autoloader.php';
 
 class FileQueueTest extends \PHPUnit_Framework_TestCase
@@ -12,7 +14,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
      */
     public function setup()
     {
-        class_exists(\FileQueue::class);
+        class_exists('\\FileQueue');
     }
 
     /**
@@ -26,7 +28,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         if (file_exists($queueFile)) {
             unlink($queueFile);
         }
-        $GeneratorFileQueue = new \FileQueue(array(
+        $GeneratorFileQueue = new FileQueue(array(
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
         ));
@@ -56,7 +58,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         if (file_exists($configsFile)) {
             unlink($configsFile);
         }
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -81,7 +83,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueDir = __DIR__ . '/run';
         $queueFileName = 'test-position';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -102,7 +104,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFileName = 'test-rewind';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $cursorFile = $queueDir . '/' . $queueFileName . '.nsp.cursor';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -125,7 +127,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFileName = 'test-end';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $cursorFile = $queueDir . '/' . $queueFileName . '.nsp.cursor';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -135,7 +137,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         if (file_exists($configsFile)) {
             unlink($configsFile);
         }
-        $this->assertEquals('14,7', $endCursorData);
+        $this->assertEquals('21,7', $endCursorData);
         file_put_contents($cursorFile, '0,1');
     }
 
@@ -148,7 +150,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFileName = 'test-track';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $trackFile = $queueDir . '/' . $queueFileName . '.nsp.track';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -174,7 +176,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFile = $queueDir . '/' . $queueFileName . '.mq';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $cursorFile = $queueDir . '/' . $queueFileName . '.nsp.cursor';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -202,7 +204,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFileName = 'test-length';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $cursorFile = $queueDir . '/' . $queueFileName . '.nsp.cursor';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName
@@ -226,7 +228,7 @@ class FileQueueTest extends \PHPUnit_Framework_TestCase
         $queueFileName = 'test-eof';
         $configsFile = $queueDir . '/' . $queueFileName . '.configs';
         $cursorFile = $queueDir . '/' . $queueFileName . '.nsp.cursor';
-        $CustomerFileQueue = new \FileQueue(array(
+        $CustomerFileQueue = new FileQueue(array(
             'role' => 'customer',
             'queueDir' => $queueDir,
             'queueFileName' => $queueFileName,

@@ -13,9 +13,6 @@ require_once(VENDOR_DIRECTORY . 'autoload.php');
 $loader = new \Composer\Autoload\ClassLoader();
 
 $loader->addPsr4('tests\\', __DIR__);
-$loader->addClassMap(array(
-    'FileQueueBase' => __DIR__ . '/../src/FileQueueBase.php',
-    'FileQueue' => __DIR__ . '/../src/FileQueue.php',
-    'QueueDataConsume' => __DIR__ . '/../src/QueueDataConsume.php'
-));
+$loader->addPsr4('Mombol\\FileQueue\\', __DIR__ . '/../src');
+$loader->addClassMap(array());
 $loader->register();

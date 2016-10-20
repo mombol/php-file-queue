@@ -1,5 +1,7 @@
 <?php
 
+namespace Mombol\FileQueue;
+
 /**
  * php file queue
  *
@@ -214,11 +216,12 @@ class FileQueue extends FileQueueBase
      * @param int $number
      * @param array $currentPosition
      * @return array|bool
+     * @throws \LogicException
      */
     public function pop($number = 1, &$currentPosition = array())
     {
         if ($this->isGenerator()) {
-            throw new LogicException('Generator can not pop data from queue!');
+            throw new \LogicException('Generator can not pop data from queue!');
         }
         $number = max(1, $number);
 
