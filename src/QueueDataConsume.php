@@ -7,7 +7,7 @@ namespace Mombol\FileQueue;
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v1.2.0
+ * @version v1.2.1
  */
 class QueueDataConsume extends ObjectDriver
 {
