@@ -7,9 +7,9 @@ namespace Mombol\FileQueue;
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v1.0.0
+ * @version v1.2.0
  */
-class QueueDataConsume extends FileQueueBase
+class QueueDataConsume extends ObjectDriver
 {
     /**
      * @var int $_consumeSpan : queue data consumption span

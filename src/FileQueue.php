@@ -7,9 +7,9 @@ namespace Mombol\FileQueue;
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v1.0.0
+ * @version v1.2.0
  */
-class FileQueue extends FileQueueBase
+class FileQueue extends ObjectDriver
 {
     /**
      * @var string $_role : queue role

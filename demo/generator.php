@@ -1,6 +1,6 @@
 <?php
 
-require '../src/FileQueueBase.php';
+require '../src/ObjectDriver.php';
 require '../src/FileQueue.php';
 
 try {

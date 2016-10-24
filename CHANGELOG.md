@@ -1,3 +1,9 @@
+## [v1.2.0] - 2016-10-20
+
+### Change
+* change the FileQueueBase class name
+
+
 ## [v1.1.0] - 2016-10-20
 
 ### Fixed

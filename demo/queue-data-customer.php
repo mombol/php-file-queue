@@ -2,7 +2,7 @@
 
 date_default_timezone_set('PRC');
 
-require '../src/FileQueueBase.php';
+require '../src/ObjectDriver.php';
 require '../src/FileQueue.php';
 require '../src/QueueDataConsume.php';
 
