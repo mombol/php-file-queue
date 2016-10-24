@@ -1,3 +1,9 @@
+## [v1.2.2] - 2016-10-24
+
+### Fixed
+* Fixed composer psr-4 map configuration key must be End with `\\` marks
+
+
 ## [v1.2.1] - 2016-10-24
 
 ### Fixed

@@ -7,7 +7,6 @@ namespace Mombol\FileQueue;
  *
  * @author mombol
  * @contact mombol@163.com
- * @version v1.2.1
  */
 class FileQueue extends ObjectDriver
 {
